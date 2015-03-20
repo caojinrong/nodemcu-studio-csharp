@@ -5,7 +5,7 @@ using SP = System.IO.Ports.SerialPort;
 
 namespace NodeMCU_Studio_2015
 {
-    class SerialPort
+    class SerialPort : IDisposable
     {
         private static SerialPort _instance;
         public readonly SP CurrentSp;
@@ -18,17 +18,30 @@ namespace NodeMCU_Studio_2015
             CurrentSp = new SP();
         }
 
-        public string[] GetPortNames()
+        public static string[] GetPortNames()
         {
             return SP.GetPortNames();
         }
 
+        public void Dispose()
+        {
+            Dispose(true);
+            GC.SuppressFinalize(this);
+        }
+
+        private void Dispose(bool disposing)
+        {
+            if (disposing && CurrentSp != null)
+                CurrentSp.Dispose();
+        }
+
         public void Close()
         {
-            if (CurrentSp.IsOpen)
-            {
-                CurrentSp.Close();
-                IsOpenChanged?.Invoke(CurrentSp.IsOpen);
+            if (!CurrentSp.IsOpen) return;
+
+            CurrentSp.Close();
+            if (IsOpenChanged != null) {
+                IsOpenChanged.Invoke(CurrentSp.IsOpen);
             }
         }
 
@@ -41,7 +54,7 @@ namespace NodeMCU_Studio_2015
                 CurrentSp.ReadTimeout = 0;
                 CurrentSp.PortName = port;
                 CurrentSp.Open();
-                IsOpenChanged?.Invoke(CurrentSp.IsOpen);
+                if (IsOpenChanged != null) IsOpenChanged(CurrentSp.IsOpen);
             }
             catch
             {
@@ -56,12 +69,12 @@ namespace NodeMCU_Studio_2015
             for (var i = 0;i < MaxRetries;i++)
             {
                 var s = CurrentSp.ReadExisting();
-                OnDataReceived?.Invoke(s);
+                if (OnDataReceived != null) OnDataReceived(s);
                 if (s.Contains(">"))
                 {
                     return true;
                 }
-                Thread.Sleep(100);
+                Thread.Sleep(50);
             }
             return false;
         }
@@ -75,12 +88,12 @@ namespace NodeMCU_Studio_2015
             {
                 var s = CurrentSp.ReadExisting();
                 result.Append(s);
-                OnDataReceived?.Invoke(s);
+                if (OnDataReceived != null) OnDataReceived.Invoke(s);
                 if (result.ToString().EndsWith("\n> "))
                 {
                     break;
                 }
-                Thread.Sleep(100);
+                Thread.Sleep(50);
             }
             var str = result.ToString();
             return str.Substring(command.Length+2, str.Length-4-command.Length); // Kill the echo, '\r\n> '
@@ -93,7 +106,7 @@ namespace NodeMCU_Studio_2015
 
         public void FireIsWorkingChanged(bool state)
         {
-            IsWorkingChanged?.Invoke(state);
+            if (IsWorkingChanged != null) IsWorkingChanged(state);
         }
 
         public event Action<bool> IsOpenChanged;

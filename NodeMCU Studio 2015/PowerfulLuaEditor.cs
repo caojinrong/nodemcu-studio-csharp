@@ -75,8 +75,7 @@ namespace NodeMCU_Studio_2015
                 _context.Post(_ =>
                 {
                     textBoxConsole.AppendText(s);
-                    textBoxConsole.SelectionStart = textBoxConsole.Text.Length;
-                    textBoxConsole.ScrollToCaret();
+                    textBoxConsole.Navigate(textBoxConsole.Lines.Count - 1);
                 }, null);
             };
         }
@@ -153,6 +152,7 @@ namespace NodeMCU_Studio_2015
                 BuildAutocompleteMenu(popupMenu);
                 var tbInfo = tb.Tag as TbInfo;
                 if (tbInfo != null) tbInfo.PopupMenu = popupMenu;
+                tb.KeyDown += OnKeyDown;
             }
             catch (Exception ex)
             {
@@ -182,8 +182,7 @@ namespace NodeMCU_Studio_2015
         private void BuildAutocompleteMenu(AutocompleteMenu popupMenu)
         {
             List<AutocompleteItem> items = _snippets.Select(item => new SnippetAutocompleteItem(item) {ImageIndex = 1}).Cast<AutocompleteItem>().ToList();
-            foreach (var item in _declarationSnippets)
-                items.Add(new DeclarationSnippet(item) { ImageIndex = 0 });
+            items.AddRange(_declarationSnippets.Select(item => new DeclarationSnippet(item) {ImageIndex = 0}));
             items.AddRange(_methods.Select(item => new MethodAutocompleteItem(item) {ImageIndex = 2}));
             items.AddRange(_keywords.Select(item => new AutocompleteItem(item)));
 
@@ -211,25 +210,7 @@ namespace NodeMCU_Studio_2015
 
         void tb_KeyDown(object sender, KeyEventArgs e)
         {
-            if (e.Modifiers == Keys.Control && e.KeyCode == Keys.OemMinus)
-            {
-                NavigateBackward();
-                e.Handled = true;
-            }
 
-            if (e.Modifiers == (Keys.Control|Keys.Shift) && e.KeyCode == Keys.OemMinus)
-            {
-                NavigateForward();
-                e.Handled = true;
-            }
-
-            if (e.KeyData == (Keys.K | Keys.Control))
-            {
-                //forced show (MinFragmentLength will be ignored)
-                var tbInfo = CurrentTb.Tag as TbInfo;
-                tbInfo?.PopupMenu.Show(true);
-                e.Handled = true;
-            }
         }
 
         void tb_SelectionChangedDelayed(object sender, EventArgs e)
@@ -275,6 +256,9 @@ namespace NodeMCU_Studio_2015
                 ThreadPool.QueueUserWorkItem(
                     o=>ReBuildObjectExplorer(text)
                     );
+                ThreadPool.QueueUserWorkItem(
+                    o => ReFoldLines()
+                    );
             }
 
             //show invisible chars
@@ -289,6 +273,12 @@ namespace NodeMCU_Studio_2015
         }
 
         List<ExplorerItem> _explorerList = new List<ExplorerItem>();
+
+        private void ReFoldLines()
+        {
+            CurrentTb.Range.ClearFoldingMarkers();
+            CurrentTb.Range.SetFoldingMarkers("(function|repeat|if|else|elseif|for|while|do)", "end");
+        }
 
         private void ReBuildObjectExplorer(string text)
         {
@@ -359,11 +349,12 @@ namespace NodeMCU_Studio_2015
             public string Title;
             public int Position;
         }
+
         class ExplorerItemComparer : IComparer<ExplorerItem>
         {
             public int Compare(ExplorerItem x, ExplorerItem y)
             {
-                return x.Title.CompareTo(y.Title);
+                return String.Compare(x.Title, y.Title, StringComparison.Ordinal);
             }
         }
 
@@ -406,12 +397,10 @@ namespace NodeMCU_Studio_2015
             }
             catch (Exception ex)
             {
-                if (MessageBox.Show(ex.Message, Resources.error, MessageBoxButtons.RetryCancel, MessageBoxIcon.Error) == DialogResult.Retry)
-                    return Save(tab);
-                return false;
+                return MessageBox.Show(ex.Message, Resources.error, MessageBoxButtons.RetryCancel, MessageBoxIcon.Error) == DialogResult.Retry && Save(tab);
             }
 
-            tb?.Invalidate();
+            if (tb != null) tb.Invalidate();
 
             return true;
         }
@@ -450,8 +439,10 @@ namespace NodeMCU_Studio_2015
 
         FastColoredTextBox CurrentTb
         {
-            get {
-                return tsFiles.SelectedItem?.Controls[0] as FastColoredTextBox;
+            get
+            {
+                if (tsFiles.SelectedItem != null) return tsFiles.SelectedItem.Controls[0] as FastColoredTextBox;
+                return null;
             }
 
             set
@@ -790,7 +781,13 @@ namespace NodeMCU_Studio_2015
                 return (m.Groups[1].Value + " " + m.Groups[2].Value + " " + m.Groups[3].Value).Trim();
             }
 
-            public override string ToolTipTitle => Text;
+            public override string ToolTipTitle
+            {
+            get
+            {
+            return Text;
+            }
+            }
         }
 
         /// <summary>
@@ -839,7 +836,10 @@ namespace NodeMCU_Studio_2015
                     Parent.Fragment.tb.DoAutoIndent();
             }
 
-            public override string ToolTipTitle => "Insert line break after '}'";
+            public override string ToolTipTitle
+            {
+                get { return "Insert line break after '}'"; }
+            }
         }
 
         private void autoIndentSelectedTextToolStripMenuItem_Click(object sender, EventArgs e)
@@ -863,7 +863,11 @@ namespace NodeMCU_Studio_2015
                 if (fastColoredTextBox != null)
                     HighlightInvisibleChars(fastColoredTextBox.Range);
             }
-            CurrentTb?.Invalidate();
+
+            if (CurrentTb != null)
+            {
+                CurrentTb.Invalidate();
+            }
         }
 
         private void btHighlightCurrentLine_Click(object sender, EventArgs e)
@@ -883,7 +887,7 @@ namespace NodeMCU_Studio_2015
                 if (fastColoredTextBox != null)
                     fastColoredTextBox.CurrentLineColor = btHighlightCurrentLine.Checked ? _currentLineColor : Color.Transparent;
             }
-            CurrentTb?.Invalidate();
+            if (CurrentTb != null) CurrentTb.Invalidate();
         }
 
         private void commentSelectedToolStripMenuItem_Click(object sender, EventArgs e)
@@ -928,12 +932,12 @@ namespace NodeMCU_Studio_2015
 
         private void bookmarkPlusButton_Click(object sender, EventArgs e)
         {
-            CurrentTb?.BookmarkLine(CurrentTb.Selection.Start.iLine);
+            if (CurrentTb != null) CurrentTb.BookmarkLine(CurrentTb.Selection.Start.iLine);
         }
 
         private void bookmarkMinusButton_Click(object sender, EventArgs e)
         {
-            CurrentTb?.UnbookmarkLine(CurrentTb.Selection.Start.iLine);
+            if (CurrentTb != null) CurrentTb.UnbookmarkLine(CurrentTb.Selection.Start.iLine);
         }
 
         private void gotoButton_DropDownOpening(object sender, EventArgs e)
@@ -986,7 +990,7 @@ namespace NodeMCU_Studio_2015
                 if (fastColoredTextBox != null)
                     fastColoredTextBox.ShowFoldingLines = btShowFoldingLines.Checked;
             }
-            CurrentTb?.Invalidate();
+            CurrentTb.Invalidate();
         }
 
         private void Zoom_click(object sender, EventArgs e)
@@ -1047,7 +1051,7 @@ namespace NodeMCU_Studio_2015
         private void RefreshSerialPort()
         {
             if (toolStripComboBoxSerialPort.ComboBox != null)
-                toolStripComboBoxSerialPort.ComboBox.DataSource = SerialPort.GetInstance().GetPortNames();
+                toolStripComboBoxSerialPort.ComboBox.DataSource = SerialPort.GetPortNames();
         }
 
         private void toolStripRunButton_Click(object sender, EventArgs e)
@@ -1094,11 +1098,14 @@ namespace NodeMCU_Studio_2015
                 return;
             }
 
-            var ports = toolStripComboBoxSerialPort.ComboBox?.DataSource as string[];
-            if (ports == null || (!SerialPort.GetInstance().CurrentSp.IsOpen && !SerialPort.GetInstance().Open(ports[index])))
+            if (toolStripComboBoxSerialPort.ComboBox != null)
             {
-                MessageBox.Show(Resources.cannot_connect_to_device);
-                return;
+                var ports = toolStripComboBoxSerialPort.ComboBox.DataSource as string[];
+                if (ports == null || (!SerialPort.GetInstance().CurrentSp.IsOpen && !SerialPort.GetInstance().Open(ports[index])))
+                {
+                    MessageBox.Show(Resources.cannot_connect_to_device);
+                    return;
+                }
             }
 
             new Task(() =>
@@ -1214,7 +1221,7 @@ namespace NodeMCU_Studio_2015
                 }
 
                 DoSerialPortAction(
-                () => ExecuteAndWait(string.Format("file.open(\"{0}\", \"r\")", Utilities.Escape(s.ToString())), () =>
+                () => ExecuteAndWait(string.Format("file.open(\"{0}\", \"r\")", Utilities.Escape(s)), () =>
                     {
                         var builder = new StringBuilder();
                         while (true)
@@ -1248,28 +1255,55 @@ namespace NodeMCU_Studio_2015
             textBoxCommand.Text = "";
             textBoxCommand.Enabled = false;
 
-            var index = toolStripComboBoxSerialPort.SelectedIndex;
-            if (index < 0)
-            {
-                MessageBox.Show(Resources.no_serial_port_selected);
-                return;
-            }
-
-            var ports = toolStripComboBoxSerialPort.ComboBox?.DataSource as string[];
-
-            if (ports == null) return;
-            var port = ports[index];
-
             DoSerialPortAction(() => ExecuteAndWait(command, () =>
             {
+                _context.Post(_ =>
+                {
+                    textBoxCommand.Enabled = true;
+                }, null);
             }));
 
         }
 
+        [Serializable]
         private class IgnoreMeException : ApplicationException
         {
 
         };
+
+        private void OnKeyDown(object sender, KeyEventArgs e)
+        {
+            switch(e.KeyData) {
+                case (Keys.Control | Keys.N):
+                    newToolStripMenuItem_Click(null, null);
+                    break;
+                case (Keys.Control | Keys.O):
+                    openToolStripMenuItem_Click(null, null);
+                    break;
+                case (Keys.Control | Keys.S):
+                    saveToolStripMenuItem_Click(null, null);
+                    break;
+                case (Keys.Alt | Keys.F4):
+                    Close();
+                    break;
+                case (Keys.Control | Keys.X):
+                    cutToolStripMenuItem_Click(null, null);
+                    break;
+                case (Keys.Control | Keys.C):
+                    copyToolStripMenuItem_Click(null, null);
+                    break;
+                case (Keys.Control | Keys.V):
+                    pasteToolStripMenuItem_Click(null, null);
+                    break;
+                case (Keys.Control | Keys.Z):
+                    undoToolStripMenuItem_Click(null, null);
+                    break;
+                case (Keys.Control | Keys.Y):
+                    redoToolStripMenuItem_Click(null, null);
+                    break;
+
+            }
+        }
     }
 
     public class InvisibleCharsRenderer : Style
