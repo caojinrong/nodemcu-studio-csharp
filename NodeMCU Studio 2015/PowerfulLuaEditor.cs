@@ -119,12 +119,13 @@ namespace NodeMCU_Studio_2015
             {
                 var tb = new FastColoredTextBox
                 {
-                    Font = new Font("Consolas", 9.75f),
+                    Font = new Font("Consolas", 12f),
                     ContextMenuStrip = cmMain,
                     Dock = DockStyle.Fill,
                     BorderStyle = BorderStyle.Fixed3D,
                     LeftPadding = 17,
-                    Language = Language.Lua
+                    ImeMode = System.Windows.Forms.ImeMode.On,
+                Language = Language.Lua
                 };
                 //tb.VirtualSpace = true;
                 tb.AddStyle(_sameWordsStyle);//same words style
@@ -133,7 +134,7 @@ namespace NodeMCU_Studio_2015
                     Tag = fileName
                 };
                 if (fileName != null)
-                    tb.OpenFile(fileName);
+                    tb.OpenFile(fileName,System.Text.Encoding.UTF8);
                 tb.Tag = new TbInfo();
                 tsFiles.AddTab(tab);
                 tsFiles.SelectedItem = tab;
