@@ -339,7 +339,8 @@ namespace NodeMCU_Studio_2015
             }
             catch (Exception e)
             {
-                MessageBox.Show(e.ToString());
+                //MessageBox.Show(e.ToString());
+                // ignore me...
             }
         }
 
@@ -1307,22 +1308,6 @@ namespace NodeMCU_Studio_2015
                 case (Keys.Alt | Keys.F4):
                     Close();
                     break;
-                case (Keys.Control | Keys.X):
-                    cutToolStripMenuItem_Click(null, null);
-                    break;
-                case (Keys.Control | Keys.C):
-                    copyToolStripMenuItem_Click(null, null);
-                    break;
-                case (Keys.Control | Keys.V):
-                    pasteToolStripMenuItem_Click(null, null);
-                    break;
-                case (Keys.Control | Keys.Z):
-                    undoToolStripMenuItem_Click(null, null);
-                    break;
-                case (Keys.Control | Keys.Y):
-                    redoToolStripMenuItem_Click(null, null);
-                    break;
-
             }
         }
     }
